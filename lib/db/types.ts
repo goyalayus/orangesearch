@@ -1,16 +1,4 @@
-export type User = {
-  id: number;
-  google_id: string;
-  email: string;
-  name: string;
-  picture: string;
-};
-
-export type Session = {
-  id: string;
-  user_id: number;
-  expires_at: Date;
-};
+// Removed User, Session, and SearchHistory types as they are no longer needed.
 
 export type CrawlStatus =
   | "pending_classification"
@@ -54,12 +42,4 @@ export type SearchResult = {
   title: string;
   description: string | null;
   score: number;
-};
-
-export type SearchHistory = {
-  id: string;
-  user_id: number | null;
-  ip_address: string | null;
-  query: string;
-  created_at: Date;
 };

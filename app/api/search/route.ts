@@ -1,11 +1,7 @@
-import { getCurrentSession } from "@/app/actions";
-import { ANONYMOUS_SEARCH_LIMIT } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { searchScoringConfig } from "@/lib/config";
 import type { SearchResult } from "@/lib/db/types";
 import { getEmbedding } from "@/lib/embedding";
-import { getClientIp, globalGETRateLimit } from "@/lib/requests";
-import { countAnonymousSearches, recordSearch } from "@/lib/search";
 import type { NextRequest } from "next/server";
 
 async function performHybridSearch(
@@ -108,21 +104,6 @@ async function performFtsSearch(
 }
 
 export async function GET(request: NextRequest): Promise<Response> {
-  if (!(await globalGETRateLimit())) {
-    return new Response(
-      JSON.stringify({
-        error: "Too many requests",
-        code: "RATE_LIMIT_EXCEEDED",
-      }),
-      {
-        status: 429,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    );
-  }
-
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q");
 
@@ -142,41 +123,8 @@ export async function GET(request: NextRequest): Promise<Response> {
   }
 
   const cleanedQuery = query.trim().toLowerCase();
-  const { user } = await getCurrentSession();
-  const ipAddress = await getClientIp();
 
-  if (!user && ipAddress) {
-    const existingSearch = await db.query(
-      "SELECT 1 FROM search_history WHERE ip_address = $1 AND query = $2 AND user_id IS NULL LIMIT 1",
-      [ipAddress, cleanedQuery],
-    );
-
-    if (existingSearch.rowCount === 0) {
-      const searchCount = await countAnonymousSearches(ipAddress);
-      if (searchCount >= ANONYMOUS_SEARCH_LIMIT) {
-        return new Response(
-          JSON.stringify({
-            error: "Search limit exceeded. Please log in to continue.",
-            code: "SEARCH_LIMIT_EXCEEDED",
-          }),
-          {
-            status: 403,
-            headers: {
-              "Content-Type": "application/json",
-            },
-          },
-        );
-      }
-    }
-  }
-
-  if (ipAddress || user) {
-    await recordSearch({
-      userId: user?.id,
-      ipAddress: ipAddress,
-      query: cleanedQuery,
-    });
-  }
+  // The call to recordSearch has been removed.
 
   try {
     let searchResults: SearchResult[];

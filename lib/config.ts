@@ -1,3 +1,5 @@
+// lib/config.ts
+
 function getEnvVar(key: string): string {
   const value = process.env[key];
   if (!value) {
@@ -5,12 +7,6 @@ function getEnvVar(key: string): string {
   }
   return value;
 }
-
-export const googleOAuthConfig = {
-  clientId: getEnvVar("GOOGLE_CLIENT_ID"),
-  clientSecret: getEnvVar("GOOGLE_CLIENT_SECRET"),
-  redirectUrl: getEnvVar("GOOGLE_REDIRECT_URL"),
-};
 
 export const googleAIConfig = {
   apiKey: getEnvVar("GOOGLE_API_KEY"),

@@ -1,13 +1,8 @@
-import { globalGETRateLimit } from "@/lib/requests";
 import type { JSX } from "react";
 import { Search } from "lucide-react";
 import { SearchInput } from "@/components/SearchForm";
 
 export default async function ProfileContent(): Promise<JSX.Element> {
-  if (!(await globalGETRateLimit())) {
-    return <div>Too many requests</div>;
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(135deg,#f1eff9_0%,#e3e1f4_40%,#d5e4f6_75%,#c7dcf4_100%)]">
       <div className="flex flex-col items-center gap-8">
