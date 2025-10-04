@@ -5,7 +5,7 @@
   "scripts": {
     "d": "next dev --turbo",
     "b": "next build",
-    "p": "next start -p 3001",
+    "p": "next start",
     "cl": "rm -rf .next",
     "l": "biome lint --write .",
     "f": "biome format --write .",

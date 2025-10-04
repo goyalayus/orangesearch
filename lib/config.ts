@@ -1,4 +1,4 @@
-// lib/config.ts
+// File: lib/config.ts
 
 function getEnvVar(key: string): string {
   const value = process.env[key];
@@ -8,9 +8,7 @@ function getEnvVar(key: string): string {
   return value;
 }
 
-export const googleAIConfig = {
-  apiKey: getEnvVar("GOOGLE_API_KEY"),
-};
+// The googleAIConfig object has been completely removed.
 
 export const dbConfig = {
   connectionString: getEnvVar("DATABASE_URL"),
