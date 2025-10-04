@@ -5,21 +5,31 @@ import { searchScoringConfig } from "@/lib/config";
 import type { SearchResult } from "@/lib/db/types";
 import type { NextRequest } from "next/server";
 
+// A new type to include the total count from our efficient query
+interface FtsQueryResult extends SearchResult {
+  total_count: string; // Comes back from postgres as a string
+}
+
 async function performFtsSearch(
   query: string,
   scoringConfig: {
     ftsWeight: number;
     pagerankWeight: number;
   },
+  limit: number,
+  offset: number,
   traceId: number,
-): Promise<SearchResult[]> {
-  console.log(`[API - ${traceId}] ➡️ Entered performFtsSearch function.`);
+): Promise<FtsQueryResult[]> {
+  console.log(
+    `[API - ${traceId}] ➡️ Entered performFtsSearch function with limit: ${limit}, offset: ${offset}.`,
+  );
   const sql = `
     SELECT
       u.url,
       uc.title,
       uc.description,
-      ($2 * ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1))) + ($3 * u.pagerank_score) AS score
+      ($2 * ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1))) + ($3 * u.pagerank_score) AS score,
+      COUNT(*) OVER() as total_count
     FROM
       urls u
     JOIN
@@ -28,20 +38,30 @@ async function performFtsSearch(
       u.status = 'completed' AND uc.search_vector @@ websearch_to_tsquery('english', $1)
     ORDER BY
       score DESC
-    LIMIT 20;
+    LIMIT $4
+    OFFSET $5;
   `;
 
   try {
-    console.log(`[API - ${traceId}] ➡️ Executing database query for query: "${query}"`);
-    const result = await db.query<SearchResult>(sql, [
+    console.log(
+      `[API - ${traceId}] ➡️ Executing database query for query: "${query}"`,
+    );
+    const result = await db.query<FtsQueryResult>(sql, [
       query,
       scoringConfig.ftsWeight,
       scoringConfig.pagerankWeight,
+      limit,
+      offset,
     ]);
-    console.log(`[API - ${traceId}] ✅ Database query successful. Found ${result.rows.length} results.`);
+    console.log(
+      `[API - ${traceId}] ✅ Database query successful. Found ${result.rows.length} results for this page.`,
+    );
     return result.rows;
   } catch (dbError) {
-    console.error(`[API - ${traceId}] ❌❌ DATABASE ERROR in performFtsSearch:`, dbError);
+    console.error(
+      `[API - ${traceId}] ❌❌ DATABASE ERROR in performFtsSearch:`,
+      dbError,
+    );
     throw dbError; // Re-throw the error to be caught by the main handler
   }
 }
@@ -49,16 +69,26 @@ async function performFtsSearch(
 export async function GET(request: NextRequest): Promise<Response> {
   const traceId = Date.now();
   console.log("\n\n=======================================================");
-  console.log(`[API - ${traceId}] 🚀 API ROUTE HIT: ${request.method} ${request.url}`);
+  console.log(
+    `[API - ${traceId}] 🚀 API ROUTE HIT: ${request.method} ${request.url}`,
+  );
   console.log(`[API - ${traceId}] 📋 Request Headers:`, request.headers);
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q");
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = 10; // 10 results per page
+  const offset = (page - 1) * limit;
 
   console.log(`[API - ${traceId}] ➡️ Extracted query parameter: "${query}"`);
+  console.log(
+    `[API - ${traceId}] ➡️ Pagination params: page=${page}, limit=${limit}, offset=${offset}`,
+  );
 
   if (!query || query.trim() === "") {
-    console.warn(`[API - ${traceId}] ⚠️ Query is missing or empty. Returning 400.`);
+    console.warn(
+      `[API - ${traceId}] ⚠️ Query is missing or empty. Returning 400.`,
+    );
     return new Response(
       JSON.stringify({
         error: "Query parameter is required.",
@@ -81,11 +111,30 @@ export async function GET(request: NextRequest): Promise<Response> {
     const searchResults = await performFtsSearch(
       cleanedQuery,
       searchScoringConfig.fts,
+      limit,
+      offset,
       traceId,
     );
-    console.log(`[API - ${traceId}] ✅ Search successful. Preparing to send 200 OK response.`);
+    console.log(
+      `[API - ${traceId}] ✅ Search successful. Preparing to send 200 OK response.`,
+    );
 
-    return new Response(JSON.stringify(searchResults), {
+    const totalResults =
+      searchResults.length > 0 ? parseInt(searchResults[0].total_count, 10) : 0;
+    const totalPages = Math.ceil(totalResults / limit);
+
+    // New response shape that includes pagination details
+    const responsePayload = {
+      results: searchResults.map(({ total_count, ...rest }) => rest),
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalResults: totalResults,
+        limit: limit,
+      },
+    };
+
+    return new Response(JSON.stringify(responsePayload), {
       status: 200,
       headers: {
         "Content-Type": "application/json",
