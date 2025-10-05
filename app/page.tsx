@@ -1,12 +1,13 @@
+// File: app/page.tsx
 import type { JSX } from "react";
 import { Search } from "lucide-react";
 import { SearchInput } from "@/components/SearchForm";
 
 export default async function ProfileContent(): Promise<JSX.Element> {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(135deg,#f1eff9_0%,#e3e1f4_40%,#d5e4f6_75%,#c7dcf4_100%)]">
-      <div className="flex flex-col items-center gap-8">
-        <form action="/search" method="GET" className="relative">
+    <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(135deg,#f1eff9_0%,#e3e1f4_40%,#d5e4f6_75%,#c7dcf4_100%)] p-4">
+      <div className="flex flex-col items-center gap-8 w-full max-w-lg">
+        <form action="/search" method="GET" className="relative w-full">
           <span
             aria-hidden
             className="
@@ -18,7 +19,7 @@ export default async function ProfileContent(): Promise<JSX.Element> {
       -z-10
     "
           />
-          <div className="flex items-center gap-4 bg-white rounded-[16px] px-7 py-5 min-w-[500px]">
+          <div className="flex items-center gap-4 bg-white rounded-[16px] px-7 py-5">
             <Search className="w-[22px] h-[22px] opacity-60 text-current" />
             <SearchInput
               placeholder="What would you like to find today?"

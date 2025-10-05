@@ -1,5 +1,4 @@
 // File: components/SearchHeader.tsx
-
 import type { JSX } from "react";
 import { Search } from "lucide-react";
 import { SearchInput } from "@/components/SearchForm";
@@ -11,11 +10,14 @@ interface SearchHeaderProps {
 
 export function SearchHeader({ query }: SearchHeaderProps): JSX.Element {
   return (
-    <header className="mb-8 flex items-center gap-6 border-b border-gray-200 pb-6">
-      <Link href="/" className="text-2xl font-bold text-orange-500">
+    <header className="mb-8 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 border-b border-gray-200 pb-6">
+      <Link
+        href="/"
+        className="text-2xl font-bold text-orange-500 self-start sm:self-auto"
+      >
         Orange<span className="text-orange-400">Search</span>
       </Link>
-      <form action="/search" method="GET" className="relative flex-grow">
+      <form action="/search" method="GET" className="relative flex-grow w-full">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
         <SearchInput
           name="q"

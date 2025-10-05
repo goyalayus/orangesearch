@@ -15,7 +15,10 @@ interface PaginationProps {
 /**
  * Helper function to generate the list of page numbers to display
  */
-const getPageNumbers = (totalPages: number, currentPage: number): (number | string)[] => {
+const getPageNumbers = (
+  totalPages: number,
+  currentPage: number,
+): (number | string)[] => {
   if (totalPages <= 7) {
     // If total pages are 7 or less, show all page numbers
     return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -29,14 +32,36 @@ const getPageNumbers = (totalPages: number, currentPage: number): (number | stri
 
   if (currentPage >= totalPages - 3) {
     // If on one of the last 4 pages
-    return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [
+      1,
+      "...",
+      totalPages - 4,
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
   }
 
   // If in a middle page
-  return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+  return [
+    1,
+    "...",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "...",
+    totalPages,
+  ];
 };
 
-export function PaginationControls({ pagination, query }: { pagination: PaginationProps; query: string }): JSX.Element {
+export function PaginationControls({
+  pagination,
+  query,
+}: {
+  pagination: PaginationProps;
+  query: string;
+}): JSX.Element {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -50,7 +75,10 @@ export function PaginationControls({ pagination, query }: { pagination: Paginati
   const hasPrevPage = currentPage > 1;
   const hasNextPage = currentPage < totalPages;
 
-  const handlePageClick = (page: number, e: React.MouseEvent<HTMLAnchorElement>) => {
+  const handlePageClick = (
+    page: number,
+    e: React.MouseEvent<HTMLAnchorElement>,
+  ) => {
     e.preventDefault();
     startTransition(() => {
       router.push(`/search?q=${encodeURIComponent(query)}&page=${page}`);
@@ -64,7 +92,9 @@ export function PaginationControls({ pagination, query }: { pagination: Paginati
       <div className="flex items-center justify-center gap-2">
         {hasPrevPage && (
           <Link
-            href={`/search?q=${encodeURIComponent(query)}&page=${currentPage - 1}`}
+            href={`/search?q=${encodeURIComponent(query)}&page=${
+              currentPage - 1
+            }`}
             onClick={(e) => handlePageClick(currentPage - 1, e)}
             className={cn(
               "flex items-center gap-1 text-sm text-blue-600 hover:underline",
@@ -84,7 +114,7 @@ export function PaginationControls({ pagination, query }: { pagination: Paginati
             >
               <polyline points="15 18 9 12 15 6" />
             </svg>
-            Previous
+            <span className="hidden sm:inline">Previous</span>
           </Link>
         )}
 
@@ -115,14 +145,16 @@ export function PaginationControls({ pagination, query }: { pagination: Paginati
 
         {hasNextPage && (
           <Link
-            href={`/search?q=${encodeURIComponent(query)}&page=${currentPage + 1}`}
+            href={`/search?q=${encodeURIComponent(query)}&page=${
+              currentPage + 1
+            }`}
             onClick={(e) => handlePageClick(currentPage + 1, e)}
             className={cn(
               "flex items-center gap-1 text-sm text-blue-600 hover:underline",
               isLoading && "pointer-events-none opacity-50",
             )}
           >
-            Next
+            <span className="hidden sm:inline">Next</span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="20"
