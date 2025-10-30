@@ -12,9 +12,6 @@ interface FtsQueryResult extends SearchResult {
 
 async function performFtsSearch(
   query: string,
-  scoringConfig: {
-    ftsWeight: number;
-  },
   limit: number,
   offset: number,
   traceId: number,
@@ -27,7 +24,7 @@ async function performFtsSearch(
       u.url,
       uc.title,
       uc.description,
-      ($2 * ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1))) AS score,
+      ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1)) AS score,
       COUNT(*) OVER() as total_count
     FROM
       urls u
@@ -47,7 +44,6 @@ async function performFtsSearch(
     );
     const result = await db.query<FtsQueryResult>(sql, [
       query,
-      scoringConfig.ftsWeight,
       limit,
       offset,
     ]);
@@ -108,7 +104,6 @@ export async function GET(request: NextRequest): Promise<Response> {
     console.log(`[API - ${traceId}] ➡️ Calling performFtsSearch...`);
     const searchResults = await performFtsSearch(
       cleanedQuery,
-      searchScoringConfig.fts,
       limit,
       offset,
       traceId,
