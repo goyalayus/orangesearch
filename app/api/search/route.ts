@@ -14,7 +14,6 @@ async function performFtsSearch(
   query: string,
   scoringConfig: {
     ftsWeight: number;
-    pagerankWeight: number;
   },
   limit: number,
   offset: number,
@@ -28,7 +27,7 @@ async function performFtsSearch(
       u.url,
       uc.title,
       uc.description,
-      ($2 * ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1))) + ($3 * u.pagerank_score) AS score,
+      ($2 * ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1))) AS score,
       COUNT(*) OVER() as total_count
     FROM
       urls u
@@ -49,7 +48,6 @@ async function performFtsSearch(
     const result = await db.query<FtsQueryResult>(sql, [
       query,
       scoringConfig.ftsWeight,
-      scoringConfig.pagerankWeight,
       limit,
       offset,
     ]);
