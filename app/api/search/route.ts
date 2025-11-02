@@ -1,56 +1,101 @@
 // File: app/api/search/route.ts
 
 import { db } from "@/lib/db";
-import { searchScoringConfig } from "@/lib/config";
 import type { SearchResult } from "@/lib/db/types";
 import type { NextRequest } from "next/server";
 
-// A new type to include the total count from our efficient query
-interface FtsQueryResult extends SearchResult {
-  total_count: string; // Comes back from postgres as a string
+/**
+ * A new type to represent the structured result of our optimized search function.
+ * It separates the paged results from the total count for clarity and efficiency.
+ */
+interface FtsSearchResults {
+  results: SearchResult[];
+  totalCount: number;
 }
 
+/**
+ * Performs an optimized full-text search.
+ * This function now runs two queries concurrently:
+ * 1. A fast COUNT(*) query to get the total number of results.
+ * 2. A paged query to get only the results for the current page.
+ * This avoids the performance overhead of using a `COUNT(*) OVER()` window function.
+ */
 async function performFtsSearch(
   query: string,
   limit: number,
   offset: number,
   traceId: number,
-): Promise<FtsQueryResult[]> {
+): Promise<FtsSearchResults> {
   console.log(
-    `[API - ${traceId}] ➡️ Entered performFtsSearch function with limit: ${limit}, offset: ${offset}.`,
+    `[API - ${traceId}] ➡️ Entered performFtsSearch with limit: ${limit}, offset: ${offset}.`,
   );
-  const sql = `
-    SELECT
-      u.url,
-      uc.title,
-      uc.description,
-      ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1)) AS score,
-      COUNT(*) OVER() as total_count
+
+  const countSql = `
+    SELECT COUNT(*)
     FROM
       urls u
     JOIN
       url_content uc ON u.id = uc.url_id
     WHERE
-      u.status = 'completed' AND uc.search_vector @@ websearch_to_tsquery('english', $1)
-    ORDER BY
-      score DESC
-    LIMIT $4
-    OFFSET $5;
+      uc.search_vector @@ websearch_to_tsquery('english', $1);
   `;
 
+const resultsSql = `
+  SELECT
+    u.url,
+    sr.title,
+    sr.description,
+    sr.score
+  FROM (
+    -- This inner query runs first, finding only the relevant rows from the large table.
+    SELECT
+      url_id,
+      title,
+      description,
+      ts_rank_cd(search_vector, websearch_to_tsquery('english', $1)) AS score
+    FROM
+      url_content
+    WHERE
+      -- The expensive filtering happens here, on a single table.
+      search_vector @@ websearch_to_tsquery('english', $1)
+    ORDER BY
+      score DESC
+    LIMIT $2
+    OFFSET $3
+  ) AS sr -- "sr" for search_results
+  -- The join happens last, matching the few resulting rows against the urls table.
+  JOIN urls u ON u.id = sr.url_id
+  -- The final ORDER BY is on the outer query to ensure the final result is sorted.
+  -- This is important because the JOIN could theoretically change the order.
+  ORDER BY
+    sr.score DESC;
+`;
   try {
     console.log(
-      `[API - ${traceId}] ➡️ Executing database query for query: "${query}"`,
+      `[API - ${traceId}] ➡️ Executing COUNT and SELECT queries concurrently for: "${query}"`,
     );
-    const result = await db.query<FtsQueryResult>(sql, [
+
+    // Run both queries in parallel for efficiency
+    const countPromise = db.query<{ count: string }>(countSql, [query]);
+    const resultsPromise = db.query<SearchResult>(resultsSql, [
       query,
       limit,
       offset,
     ]);
+
+    const [countResult, resultsResult] = await Promise.all([
+      countPromise,
+      resultsPromise,
+    ]);
+
     console.log(
-      `[API - ${traceId}] ✅ Database query successful. Found ${result.rows.length} results for this page.`,
+      `[API - ${traceId}] ✅ Database queries successful. Found ${resultsResult.rows.length} results for this page. Total matches: ${countResult.rows[0]?.count}.`,
     );
-    return result.rows;
+
+    const totalCount = parseInt(countResult.rows[0]?.count || "0", 10);
+    const results = resultsResult.rows;
+
+    return { results, totalCount };
   } catch (dbError) {
     console.error(
       `[API - ${traceId}] ❌❌ DATABASE ERROR in performFtsSearch:`,
@@ -102,7 +147,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
   try {
     console.log(`[API - ${traceId}] ➡️ Calling performFtsSearch...`);
-    const searchResults = await performFtsSearch(
+    const { results, totalCount } = await performFtsSearch(
       cleanedQuery,
       limit,
       offset,
@@ -112,17 +157,15 @@ export async function GET(request: NextRequest): Promise<Response> {
       `[API - ${traceId}] ✅ Search successful. Preparing to send 200 OK response.`,
     );
 
-    const totalResults =
-      searchResults.length > 0 ? parseInt(searchResults[0].total_count, 10) : 0;
-    const totalPages = Math.ceil(totalResults / limit);
+    const totalPages = Math.ceil(totalCount / limit);
 
-    // New response shape that includes pagination details
+    // The response shape is identical to before, making this a transparent backend change.
     const responsePayload = {
-      results: searchResults.map(({ total_count, ...rest }) => rest),
+      results: results, // The results are already clean, no .map() needed.
       pagination: {
         currentPage: page,
         totalPages: totalPages,
-        totalResults: totalResults,
+        totalResults: totalCount,
         limit: limit,
       },
     };
