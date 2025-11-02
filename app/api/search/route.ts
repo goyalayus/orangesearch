@@ -41,35 +41,34 @@ async function performFtsSearch(
   `;
 
 const resultsSql = `
-  SELECT
-    u.url,
-    sr.title,
-    sr.description,
-    sr.score
-  FROM (
-    -- This inner query runs first, finding only the relevant rows from the large table.
     SELECT
-      url_id,
-      title,
-      description,
-      ts_rank_cd(search_vector, websearch_to_tsquery('english', $1)) AS score
+      u.url,
+      uc.title,
+      uc.description,
+      -- The expensive rank calculation is now only done on the pre-filtered 1000 rows.
+      ts_rank_cd(uc.search_vector, websearch_to_tsquery('english', $1)) AS score
     FROM
-      url_content
+      url_content uc
+    JOIN
+      urls u ON u.id = uc.url_id
     WHERE
-      -- The expensive filtering happens here, on a single table.
-      search_vector @@ websearch_to_tsquery('english', $1)
+      -- This is the key change: we only process rows whose IDs are in our limited set.
+      uc.url_id IN (
+        -- This subquery runs first and is very fast.
+        SELECT url_id
+        FROM url_content
+        -- 1. Use the fast GIN index to find potential matches.
+        WHERE search_vector @@ websearch_to_tsquery('english', $1)
+        -- 2. Immediately stop after finding 1000 candidates to avoid a full table scan.
+        LIMIT 1000
+      )
     ORDER BY
+      -- The final sort is now on a much smaller dataset (max 1000 rows).
       score DESC
-    LIMIT $2
-    OFFSET $3
-  ) AS sr -- "sr" for search_results
-  -- The join happens last, matching the few resulting rows against the urls table.
-  JOIN urls u ON u.id = sr.url_id
-  -- The final ORDER BY is on the outer query to ensure the final result is sorted.
-  -- This is important because the JOIN could theoretically change the order.
-  ORDER BY
-    sr.score DESC;
-`;
+    LIMIT $2  -- Apply pagination limit (e.g., 10)
+    OFFSET $3; -- Apply pagination offset
+  `;
+
   try {
     console.log(
       `[API - ${traceId}] ➡️ Executing COUNT and SELECT queries concurrently for: "${query}"`,
